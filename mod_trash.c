@@ -87,7 +87,7 @@ static int create_path(pool *p, const char *path) {
   return 0;
 }
 
-/* UTIMES-GID ROOTPRIVS WRAPPER */
+/* UTIMES GID PRIVS_ROOT HACK */
 /* COPIED & MODIFIED FROM mod_facts.c LINES 610-680 */
 static int utimes_gid_rootprivs(pool *p, const char *path, struct timeval *tvs) {
 
@@ -585,7 +585,7 @@ MODRET trash_dele(cmd_rec *cmd) {
         pr_fs_clear_cache();
         if (pr_fsio_utimes(file, tvs) < 0) {
           /* UTIMES ERROR */
-          /* EPERM SEE mod_facts.c */
+          /* GET errno TO STRING FOR DEBUG */
 
           switch (errno) {
             case EACCES: utimeerr = "EACCES";
@@ -600,6 +600,14 @@ MODRET trash_dele(cmd_rec *cmd) {
 
           pr_log_debug(DEBUG3, MOD_TRASH_VERSION ": error setting %s for file '%s': %s %s", trashsetfiletime, file, utimeerr, strerror(errno));
 
+          /* UTIMES EPERM ERROR? ATTEMPT GID/PRIVS_ROOT WORKAROUND */
+          if (errno == EPERM) {
+
+            if (utimes_gid_root(cmd->tmp_pool, file, tvs) > 0) {
+              /* UTIMES OK */
+              pr_log_debug(DEBUG3, MOD_TRASH_VERSION ": %s set for file '%s' using PRIVS_ROOT", trashsetfiletime, file);
+            }
+          }
 
           /* DECLINE? */
           if (trasherrordecline == TRUE)
